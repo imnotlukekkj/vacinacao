@@ -3,14 +3,44 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
+from urllib.parse import quote_plus
+from pathlib import Path
 
-load_dotenv()
+# Tentar carregar um .env localizado na pasta `backend/` relativa a este arquivo.
+# Isso evita um problema conhecido em que `find_dotenv()` falha quando o código
+# é executado via `python -c` ou here-doc (stack frame inesperado).
+try:
+    base_dir = Path(__file__).resolve().parents[1]
+    dotenv_path = base_dir / '.env'
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path=str(dotenv_path))
+    else:
+        # Fallback para comportamento padrão (procura em parents)
+        load_dotenv()
+except AssertionError:
+    # Proteção extra: se find_dotenv levantar AssertionError em contextos
+    # interativos, chamar load_dotenv() sem find_dotenv.
+    load_dotenv()
 
-# String de conexão PostgreSQL
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://user:password@localhost:5432/vacina_brasil"
-)
+# Construir DATABASE_URL a partir de variáveis DB_* (se fornecidas) ou usar
+# a variável DATABASE_URL diretamente. Isso permite manter seu .env atual
+# com DB_HOST/DB_USER/... sem precisar duplicar DATABASE_URL.
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+if DB_USER and DB_PASSWORD and DB_HOST and DB_NAME:
+    # Escapar a senha (caso contenha caracteres especiais)
+    password_esc = quote_plus(DB_PASSWORD)
+    DATABASE_URL = f"postgresql://{DB_USER}:{password_esc}@{DB_HOST}:{DB_PORT or '5432'}/{DB_NAME}"
+else:
+    # Fallback para a variável única DATABASE_URL (opção compatível)
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "postgresql://user:password@localhost:5432/vacina_brasil"
+    )
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

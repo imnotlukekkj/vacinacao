@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from database import get_db, TimePoint, EstadoSnapshot
+from .database import get_db, TimePoint, EstadoSnapshot
 import random
 
 
