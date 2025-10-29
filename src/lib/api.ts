@@ -1,6 +1,6 @@
 import { Overview, TimePoint, RankingUf, Filters, ApiResponse } from '@/types';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8001';
 
 // Função auxiliar para fazer requisições HTTP
 async function fetchApi<T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {

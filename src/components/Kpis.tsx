@@ -27,14 +27,14 @@ export function Kpis({ data }: { data?: Overview }) {
       textColor: "text-white",
       icon: "📊"
     },
-    { 
-      label: "ESAVI", 
-      value: k.esavi.toLocaleString(),
-      subtitle: `${((k.esavi / k.aplicadas) * 100000).toFixed(2)} por 100k doses`,
-      bgColor: "bg-yellow-400",
-      textColor: "text-white",
-      icon: "⚠️"
-    },
+    // { 
+//      label: "ESAVI", 
+//      value: k.esavi.toLocaleString(),
+//     subtitle: `${((k.esavi / k.aplicadas) * 100000).toFixed(2)} por 100k doses`,
+//      bgColor: "bg-yellow-400",
+//      textColor: "text-white",
+//      icon: "⚠️"
+//    },
   ];
   
   return (

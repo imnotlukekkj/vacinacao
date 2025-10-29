@@ -101,6 +101,22 @@ uvicorn app.main:app --reload --port 8000
 
 O servidor estará disponível em: `http://localhost:8000`
 
+### Executando com Docker (Postgres + API)
+
+Você também pode subir o banco e a API via Docker Compose. A raiz do projeto contém um `docker-compose.yml` que cria um container Postgres e o backend.
+
+1. Copie `backend/.env.example` para `backend/.env` e ajuste se quiser (ou edite variáveis diretamente no `docker-compose.yml`).
+
+2. No terminal (na raiz do repositório), execute:
+
+```powershell
+docker compose up --build
+```
+
+3. Após o compose terminar de subir, a API ficará acessível em `http://localhost:8000` e o Postgres em `localhost:5432`.
+
+O `Dockerfile` do backend aguarda o Postgres ficar pronto antes de iniciar o uvicorn, então o backend só iniciará quando o banco estiver aceitando conexões.
+
 ## 📚 Documentação da API
 
 Acesse a documentação interativa em:

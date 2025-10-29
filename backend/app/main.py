@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, text
 from .database import get_db, TimePoint, EstadoSnapshot
 import random
 
@@ -16,6 +16,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -142,22 +144,30 @@ def get_overview(
         
         state_items = query.all()
         
-        if not state_items:
-            # Se não houver dados no banco, retornar dados mock como fallback
-            state_items_result = generate_state_snapshot()
-            if not is_unset(uf):
-                state_items_result = [x for x in state_items_result if x["uf"] == uf]
-            
-            total_distribuidas = sum(x["distribuídas"] for x in state_items_result) or 1
-            total_aplicadas = sum(x["aplicadas"] for x in state_items_result)
-            eficiencia = round((total_aplicadas / total_distribuidas) * 100, 1)
-            esavi = int(random.random() * len(state_items_result) * 1000)
+        # Preferir agregar diretamente da tabela `distribuicao` se ela existir e
+        # tiver dados — isso garante que o frontend mostre números reais.
+        try:
+            r = db.execute(text("SELECT COALESCE(SUM(qtde),0) AS total FROM distribuicao")).first()
+            distrib_sum = int(r.total) if r and getattr(r, 'total', None) is not None else 0
+        except Exception:
+            distrib_sum = 0
+
+        if distrib_sum > 0:
+            total_distribuidas = distrib_sum
+            total_aplicadas = 0
+            eficiencia = 0.0
+            esavi = 0
+        elif not state_items:
+            # Sem dados no banco -> retornar valores vazios/zeros conforme solicitado
+            total_distribuidas = 0
+            total_aplicadas = 0
+            eficiencia = 0.0
+            esavi = 0
         else:
-            # Calcular totais a partir dos dados do banco
+            # Calcular totais a partir dos dados do banco (estado snapshot)
             total_distribuidas = sum(s.distribuídas for s in state_items) or 1
             total_aplicadas = sum(s.aplicadas for s in state_items)
             eficiencia = round((total_aplicadas / total_distribuidas) * 100, 1)
-            
             # Buscar ESAVI total do banco se disponível
             esavi_query = db.query(func.sum(TimePoint.esavi)).scalar()
             esavi = int(esavi_query) if esavi_query else 0
@@ -169,22 +179,13 @@ def get_overview(
             "esavi": esavi,
         }
         return {"data": overview, "success": True}
-    except Exception as e:
-        # Fallback para dados mock em caso de erro no banco
-        state_items_result = generate_state_snapshot()
-        if not is_unset(uf):
-            state_items_result = [x for x in state_items_result if x["uf"] == uf]
-        
-        total_distribuidas = sum(x["distribuídas"] for x in state_items_result) or 1
-        total_aplicadas = sum(x["aplicadas"] for x in state_items_result)
-        eficiencia = round((total_aplicadas / total_distribuidas) * 100, 1)
-        esavi = int(random.random() * len(state_items_result) * 1000)
-        
+    except Exception:
+        # Em caso de erro de consulta, retornar valores vazios/zeros para não expor mocks
         overview = {
-            "distribuídas": total_distribuidas,
-            "aplicadas": total_aplicadas,
-            "eficiência": eficiencia,
-            "esavi": esavi,
+            "distribuídas": 0,
+            "aplicadas": 0,
+            "eficiência": 0.0,
+            "esavi": 0,
         }
         return {"data": overview, "success": True}
 
@@ -215,12 +216,30 @@ def get_timeseries(
         records = query.all()
         
         if not records:
-            # Fallback para dados mock
-            series = generate_monthly_timeseries(ano_val, uf_val)
-            if not is_unset(mes):
-                m = parse_int(mes)
-                if m:
-                    series = [p for p in series if p["mês"] == m]
+            # Se não existirem registros na tabela timeseries, tentar agregar por
+            # mês a partir da tabela `distribuicao` como fallback.
+            try:
+                agg = db.execute(text(
+                    "SELECT ano, mes AS mês, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes"
+                )).all()
+                series = [
+                    {
+                        "ano": int(r.ano) if getattr(r, 'ano', None) is not None else 2021,
+                        "mês": int(r.mês),
+                        "uf": "BR",
+                        "distribuídas": int(r.distribuídas),
+                        "aplicadas": 0,
+                        "eficiência": 0.0,
+                        "esavi": 0,
+                    }
+                    for r in agg
+                ]
+                if not is_unset(mes):
+                    m = parse_int(mes)
+                    if m:
+                        series = [p for p in series if p["mês"] == m]
+            except Exception:
+                series = []
         else:
             # Converter objetos do banco para dicts
             series = [
@@ -237,16 +256,9 @@ def get_timeseries(
             ]
         
         return {"data": series, "success": True}
-    except Exception as e:
-        # Fallback em caso de erro
-        ano_val = parse_int(ano) or 2021
-        uf_val = uf if not is_unset(uf) else "BR"
-        series = generate_monthly_timeseries(ano_val, uf_val)
-        if not is_unset(mes):
-            m = parse_int(mes)
-            if m:
-                series = [p for p in series if p["mês"] == m]
-        return {"data": series, "success": True}
+    except Exception:
+        # Em caso de erro -> retornar lista vazia
+        return {"data": [], "success": True}
 
 
 @app.get("/api/ranking/ufs", response_model=ApiListResponse)
@@ -267,10 +279,24 @@ def get_ranking_ufs(
         records = query.order_by(EstadoSnapshot.eficiência.desc()).all()
         
         if not records:
-            # Fallback para dados mock
-            items = generate_state_snapshot()
-            if not is_unset(uf):
-                items = [x for x in items if x["uf"] == uf]
+            # Se não houver snapshot, tentar agrupar por sigla a partir da tabela
+            # `distribuicao` e retornar ranking por distribuídas.
+            try:
+                agg = db.execute(text(
+                    "SELECT sigla AS uf, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY sigla ORDER BY SUM(qtde) DESC"
+                )).all()
+                items = [
+                    {
+                        "uf": (r.uf.strip() if getattr(r, 'uf', None) else r.uf) if getattr(r, 'uf', None) is not None else None,
+                        "nome": None,
+                        "distribuídas": int(r.distribuídas),
+                        "aplicadas": 0,
+                        "eficiência": 0.0,
+                    }
+                    for r in agg
+                ]
+            except Exception:
+                items = []
         else:
             # Converter objetos do banco para dicts
             items = [
@@ -285,7 +311,7 @@ def get_ranking_ufs(
             ]
         
         return {"data": items, "success": True}
-    except Exception as e:
+    except Exception:
         # Fallback em caso de erro
         items = generate_state_snapshot()
         if not is_unset(uf):
