@@ -5,7 +5,6 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from .database import get_db, TimePoint, EstadoSnapshot
-import random
 
 
 app = FastAPI(title="Vacina Brasil API", version="1.0.0")
@@ -39,30 +38,6 @@ class ApiListResponse(BaseModel):
     message: Optional[str] = None
 
 
-# ====== Utilitários de geração de dados mock ======
-
-STATES = [
-    {"uf": "SP", "nome": "São Paulo", "populacao": 46649132},
-    {"uf": "RJ", "nome": "Rio de Janeiro", "populacao": 17463349},
-    {"uf": "MG", "nome": "Minas Gerais", "populacao": 21411923},
-    {"uf": "BA", "nome": "Bahia", "populacao": 14985284},
-    {"uf": "PR", "nome": "Paraná", "populacao": 11597484},
-    {"uf": "RS", "nome": "Rio Grande do Sul", "populacao": 11466630},
-    {"uf": "PE", "nome": "Pernambuco", "populacao": 9674793},
-    {"uf": "CE", "nome": "Ceará", "populacao": 9240580},
-    {"uf": "PA", "nome": "Pará", "populacao": 8777124},
-    {"uf": "SC", "nome": "Santa Catarina", "populacao": 7338473},
-]
-
-
-FABRICANTES = [
-    {"nome": "Pfizer/BioNTech", "id": "pfizer"},
-    {"nome": "AstraZeneca", "id": "astrazeneca"},
-    {"nome": "CoronaVac", "id": "coronavac"},
-    {"nome": "Janssen", "id": "janssen"},
-]
-
-
 def parse_int(value: Optional[str]) -> Optional[int]:
     if value is None:
         return None
@@ -77,52 +52,6 @@ def is_unset(filter_value: Optional[str]) -> bool:
         return True
     v = filter_value.strip().lower()
     return v in ("", "todos", "all", "none", "null")
-
-
-def generate_state_snapshot() -> List[Dict[str, Any]]:
-    items = []
-    for s in STATES:
-        distribuidas = int(s["populacao"] * (0.8 + random.random() * 0.4))
-        aplicadas = int(distribuidas * (0.75 + random.random() * 0.15))
-        eficiencia = round((aplicadas / max(1, distribuidas)) * 100, 1)
-        items.append(
-            {
-                "uf": s["uf"],
-                "nome": s["nome"],
-                "distribuídas": distribuidas,
-                "aplicadas": aplicadas,
-                "eficiência": eficiencia,
-            }
-        )
-    items.sort(key=lambda x: x["eficiência"], reverse=True)
-    return items
-
-
-def generate_monthly_timeseries(ano: int, uf: str) -> List[Dict[str, Any]]:
-    series = []
-    for mes in range(1, 13):
-        distribuidas = int(15_000_000 + random.random() * 5_000_000)
-        aplicadas = int(12_000_000 + random.random() * 4_000_000)
-        eficiencia = round((aplicadas / max(1, distribuidas)) * 100, 1)
-        esavi = int(1_000 + random.random() * 500)
-        series.append(
-            {
-                "ano": ano,
-                "mês": mes,
-                "uf": uf,
-                "distribuídas": distribuidas,
-                "aplicadas": aplicadas,
-                "eficiência": eficiencia,
-                "esavi": esavi,
-            }
-        )
-    return series
-
-
-def apply_filters_generic(items: List[Dict[str, Any]], uf: Optional[str]) -> List[Dict[str, Any]]:
-    if not is_unset(uf):
-        return [x for x in items if x.get("uf") == uf]
-    return items
 
 
 # ====== Endpoints ======
@@ -312,10 +241,8 @@ def get_ranking_ufs(
         
         return {"data": items, "success": True}
     except Exception:
-        # Fallback em caso de erro
-        items = generate_state_snapshot()
-        if not is_unset(uf):
-            items = [x for x in items if x["uf"] == uf]
+        # Em caso de erro, não retornar mocks — retornar lista vazia
+        items = []
         return {"data": items, "success": True}
 
 

@@ -4,70 +4,122 @@
 
 **URL**: https://lovable.dev/projects/569bbfc9-db8f-4928-9796-eb92067bf8c8
 
-## How can I edit this code?
+# Vacinação — app de visualização
 
-There are several ways of editing your application.
+Este repositório contém o frontend (React + Vite + TypeScript) e o backend (FastAPI) usados para visualizar dados de vacinação.
 
-**Use Lovable**
+Objetivo deste README
+- Consolidar as instruções para rodar localmente e para deploy simples.
+- Explicar como importar um dump `.sql` para o banco (caso você receba um arquivo de dados).
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/569bbfc9-db8f-4928-9796-eb92067bf8c8) and start prompting.
+Estrutura do repositório
+- `src/` — frontend (Vite + React + TypeScript)
+- `backend/` — aplicação FastAPI (Python)
+- `docker-compose.yml` — define serviços para desenvolvimento (Postgres + backend)
 
-Changes made via Lovable will be committed automatically to this repo.
+Pré-requisitos
+- Docker Desktop (Windows/Mac) ou Docker Engine + docker-compose
+- Node.js (LTS) se você quiser rodar o frontend localmente com `npm run dev`
 
-**Use your preferred IDE**
+Rodando localmente (modo recomendado: Docker Compose)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+1) Subir os serviços:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```powershell
+# na raiz do projeto
+docker compose up --build -d
+```
 
-Follow these steps:
+Isso cria um container Postgres e o backend. O backend expõe a porta `8001` por padrão no `docker-compose.yml`.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+2) Verificar health do backend:
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```powershell
+curl http://localhost:8001/health
+# ou no browser: http://localhost:8001/health
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+Importar um arquivo `.sql` (dump) para o Postgres em container
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+Faça backup antes de importar (recomendado):
+
+```powershell
+docker exec -i pg-temp pg_dump -U postgres -d vacinacao > .\vacinacao_backup_before_import.sql
+```
+
+Importar um SQL textual (ex.: `dados.sql`):
+
+```powershell
+# copiar para o container
+docker cp .\dados.sql pg-temp:/tmp/dados.sql
+docker exec -i pg-temp psql -U postgres -d vacinacao -f /tmp/dados.sql
+
+# ou stream via stdin
+Get-Content .\dados.sql -Raw | docker exec -i pg-temp psql -U postgres -d vacinacao -f -
+```
+
+Verificações pós-import:
+
+```powershell
+docker exec -i pg-temp psql -U postgres -d vacinacao -c "SELECT COUNT(*) FILTER (WHERE trim(sigla) <> '') AS preenchidas, COUNT(*) AS total FROM distribuicao;"
+docker exec -i pg-temp psql -U postgres -d vacinacao -c "SELECT SUM(qtde) FROM distribuicao;"
+```
+
+Frontend — executar em dev
+
+1) Instalar dependências:
+
+```powershell
+npm install
+```
+
+2) Rodar em desenvolvimento (Vite):
+
+```powershell
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Observação sobre variáveis do frontend
+- O frontend lê a URL da API por `import.meta.env.VITE_API_URL`. Para desenvolvimento, crie um arquivo `.env.local` com a variável:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```
+VITE_API_URL=http://localhost:8001
+```
 
-**Use GitHub Codespaces**
+Backend — executar localmente (sem Docker)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Se preferir rodar o backend localmente (Python):
 
-## What technologies are used for this project?
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
+uvicorn backend.app.main:app --reload --port 8000
+```
 
-This project is built with:
+Observações importantes antes do deploy
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- Migrations: atualmente não há Alembic configurado. Para produção, adicione migrations ou um script idempotente para criar as tabelas.
+- Dados: garanta que as colunas importantes (ex.: `sigla` em `distribuicao`) estejam corretas antes do deploy.
+- Secrets: não commit `DB_PASSWORD` ou segredos. Use variáveis de ambiente/secret manager no serviço de hosting.
+- Frontend: gere build (`npm run build`) e hospede o output estático (Netlify, Vercel ou Nginx). Configure `VITE_API_URL` no ambiente do host.
+- Backend: pode ser deployado como container (Render, Fly, Railway) ou como serviço Uvicorn/Gunicorn em VM.
 
-## How can I deploy this project?
+Checklist rápido para publicar uma versão web
 
-Simply open [Lovable](https://lovable.dev/projects/569bbfc9-db8f-4928-9796-eb92067bf8c8) and click on Share -> Publish.
+1. Adicionar migrations / criar script `init_db` para criar tabelas.
+2. Importar dados (ou garantir DB de produção com os dados corretos).
+3. Configurar variáveis de ambiente no host (DB_URL, VITE_API_URL).
+4. Gerar build do frontend e publicar (Vercel/Netlify).  
+5. Publicar backend (container) e apontar frontend para a URL pública.
 
-## Can I connect a custom domain to my Lovable project?
+Se quiser, eu posso:
+- adicionar um script de inicialização idempotente para criar tabelas básicas;
+- preparar um `frontend/.env.example` e `backend/.env.example` com variáveis necessárias;
+- ajudar a gerar o `docker-compose.prod.yml` ou um Dockerfile para o frontend.
 
-Yes, you can!
+Contato / ajuda
+- Se quiser que eu atualize o `README` com instruções específicas do seu host (Vercel/Render/etc.) me diga qual serviço pretende usar.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+---
+Feito por você — instruções curtas e práticas para rodar e publicar.
