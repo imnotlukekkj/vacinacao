@@ -3,7 +3,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
-from urllib.parse import quote_plus
 from pathlib import Path
 
 # Tentar carregar um .env localizado na pasta `backend/` relativa a este arquivo.
@@ -22,27 +21,21 @@ except AssertionError:
     # interativos, chamar load_dotenv() sem find_dotenv.
     load_dotenv()
 
-# Construir DATABASE_URL a partir de variáveis DB_* (se fornecidas) ou usar
-# a variável DATABASE_URL diretamente. Isso permite manter seu .env atual
-# com DB_HOST/DB_USER/... sem precisar duplicar DATABASE_URL.
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+# Use exclusivamente a variável de ambiente DATABASE_URL.
+# Não aceitar valores padrão embutidos nem construir a URL a partir de
+# DB_HOST/DB_USER/etc. Isso evita vazamento de defaults e garante que o
+# deploy/ambiente defina explicitamente a string de conexão.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL não encontrada. Configure a variável de ambiente DATABASE_URL "
+        "apontando para seu Postgres (ex.: postgresql://user:pass@host:5432/db?sslmode=require) "
+        "ou crie um arquivo .env em 'back-end/.env' com a chave DATABASE_URL."
+    )
+
+# Ler ajustes de pool (opcionais) — mantém defaults razoáveis quando ausentes
 DB_POOL_SIZE = os.getenv("DB_POOL_SIZE")
 DB_MAX_OVERFLOW = os.getenv("DB_MAX_OVERFLOW")
-
-if DB_USER and DB_PASSWORD and DB_HOST and DB_NAME:
-    # Escapar a senha (caso contenha caracteres especiais)
-    password_esc = quote_plus(DB_PASSWORD)
-    DATABASE_URL = f"postgresql://{DB_USER}:{password_esc}@{DB_HOST}:{DB_PORT or '5432'}/{DB_NAME}"
-else:
-    # Fallback para a variável única DATABASE_URL (opção compatível)
-    DATABASE_URL = os.getenv(
-        "DATABASE_URL",
-        "postgresql://user:password@localhost:5432/vacina_brasil"
-    )
 
 # Pool sizing: usar variáveis de ambiente quando fornecidas, senão defaults
 try:

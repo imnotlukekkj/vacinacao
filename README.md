@@ -1,3 +1,97 @@
+# Projeto Vacinação
+
+Breve: frontend (Vite + React + TypeScript) e backend (FastAPI) para visualização de dados de vacinação.
+
+Importante — estado atual do código
+- O backend está em `back-end/` (FastAPI, Python).
+- A aplicação exige explicitamente a variável de ambiente `DATABASE_URL` — não há valores padrão embutidos.
+- Há um script Windows PowerShell para auxiliar a importação de dumps: `scripts/import_to_supabase.ps1`.
+
+Requisitos
+- Node.js (LTS) — para o frontend
+- Python 3.10+ — para o backend
+- Cliente PostgreSQL (`psql`/`pg_restore`) opcional (útil para import manual)
+
+Como rodar localmente
+
+1) Backend
+
+- Crie um arquivo `back-end/.env` contendo apenas a chave `DATABASE_URL` (não comite esse arquivo):
+
+```
+DATABASE_URL=postgresql://<user>:<pass>@<host>:5432/<db>?sslmode=require
+```
+
+- No PowerShell (a partir da raiz do projeto):
+
+```powershell
+cd .\back-end
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+# iniciar o backend (ajuste porta se precisar)
+uvicorn app.main:app --reload --port 8002
+```
+
+Observações:
+- Se `DATABASE_URL` não estiver definida, a aplicação aborta com uma mensagem clara — garanta que a variável esteja presente antes de iniciar.
+- Variáveis opcionais: `DB_POOL_SIZE` e `DB_MAX_OVERFLOW` (ajustam pool do SQLAlchemy).
+
+2) Frontend
+
+- Na raiz do projeto:
+
+```powershell
+npm install
+# definir a URL da API para desenvolvimento
+$env:VITE_API_URL = 'http://localhost:8002'
+npm run dev
+```
+
+Ou crie um arquivo `.env.local` no root com:
+
+```
+VITE_API_URL=http://localhost:8002
+```
+
+Importar um dump (opções)
+
+- Para Supabase/Postgres gerenciado, há um script que tenta conectar com `psql` e importar:
+
+```powershell
+.\scripts\import_to_supabase.ps1 -FilePath .\dados.sql
+```
+
+- Alternativamente, use o painel do Supabase (Backups / SQL Editor) para uploads grandes.
+
+Checks rápidos pós-import
+
+```powershell
+psql "${DATABASE_URL}" -c "SELECT COUNT(*) FROM public.distribuicao;"
+psql "${DATABASE_URL}" -c "SELECT SUM(qtde) FROM public.distribuicao;"
+```
+
+Segurança / Git
+
+- Nunca comite `back-end/.env` ou `DATABASE_URL` nas ferramentas de versionamento. `.gitignore` já contém entradas para `.env`.
+- Verifique `git status` antes de `git add`/`git commit` para evitar subir segredos.
+
+Notas de compatibilidade
+
+- O backend foi adaptado para tolerar variações no esquema das colunas (ex.: nomes diferentes em dumps), mas depende da `DATABASE_URL` correta.
+- Pydantic foi fixado para a versão compatível (1.10.x) no `back-end/requirements.txt`.
+
+Problemas comuns
+
+- Erro ao iniciar relacionado a `DATABASE_URL` ausente: verifique `back-end/.env` ou defina no ambiente.
+- Erro de import/psql: confirme que `psql` está disponível no PATH e que a string de conexão usa `sslmode=require` quando necessário.
+
+Precisa que eu:
+- gere um `back-end/.env.example` sem segredos,
+- atualize instruções adicionais (CI/deploy), ou
+- faça o commit das mudanças feitas no código (README, back-end/app/database.py, scripts)?
+
+Feito por você — README curto e compatível com o estado atual do repositório.
 # Bem-vindo ao projeto de Vacinação
 
 ## Project info
