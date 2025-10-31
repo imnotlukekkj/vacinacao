@@ -101,21 +101,35 @@ uvicorn app.main:app --reload --port 8000
 
 O servidor estará disponível em: `http://localhost:8000`
 
-### Executando com Docker (Postgres + API)
+### Conexão com Supabase (recomendado)
 
-Você também pode subir o banco e a API via Docker Compose. A raiz do projeto contém um `docker-compose.yml` que cria um container Postgres e o backend.
+Este projeto espera uma string `DATABASE_URL` em `backend/.env` apontando para um Postgres gerenciado (por exemplo Supabase). Exemplo de `backend/.env`:
 
-1. Copie `backend/.env.example` para `backend/.env` e ajuste se quiser (ou edite variáveis diretamente no `docker-compose.yml`).
-
-2. No terminal (na raiz do repositório), execute:
-
-```powershell
-docker compose up --build
+```env
+DATABASE_URL=postgresql://postgres:<senha>@<host>:5432/postgres?sslmode=require
 ```
 
-3. Após o compose terminar de subir, a API ficará acessível em `http://localhost:8000` e o Postgres em `localhost:5432`.
+Para importar dumps grandes, prefira usar o painel do Supabase (SQL Editor / Import). Alternativamente, use o script `scripts/import_to_supabase.ps1` para importar via `psql`/`pg_restore`.
 
-O `Dockerfile` do backend aguarda o Postgres ficar pronto antes de iniciar o uvicorn, então o backend só iniciará quando o banco estiver aceitando conexões.
+1. Criar e ativar o ambiente virtual e instalar dependências:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+2. Iniciar o servidor localmente:
+
+```powershell
+uvicorn app.main:app --reload --port 8002
+```
+
+3. Testar a API (por exemplo):
+
+```powershell
+curl http://localhost:8002/health
+```
 
 ## 📚 Documentação da API
 

@@ -46,6 +46,34 @@ def parse_int(value: Optional[str]) -> Optional[int]:
     except Exception:
         return None
 
+def try_scalar_query(db: Session, sql_variants: List[str]):
+    """Tenta executar cada string SQL em sql_variants em ordem e retorna
+    a first row if uma execução funcionar. Caso todas falhem, retorna None.
+
+    Isso torna o código tolerante a variações no schema (por exemplo colunas
+    em maiúsculas ou com prefixos como TX_QTDE)."""
+    for sql in sql_variants:
+        try:
+            r = db.execute(text(sql)).first()
+            if r is not None:
+                return r
+        except Exception:
+            # ignora e tenta próxima variante
+            continue
+    return None
+
+
+def try_query_all(db: Session, sql_variants: List[str]):
+    """Executa cada SQL em sql_variants até uma execução bem sucedida e
+    retorna .all() do resultado. Se todas falharem, retorna None."""
+    for sql in sql_variants:
+        try:
+            rows = db.execute(text(sql)).all()
+            return rows
+        except Exception:
+            continue
+    return None
+
 
 def is_unset(filter_value: Optional[str]) -> bool:
     if filter_value is None:
@@ -76,7 +104,13 @@ def get_overview(
         # Preferir agregar diretamente da tabela `distribuicao` se ela existir e
         # tiver dados — isso garante que o frontend mostre números reais.
         try:
-            r = db.execute(text("SELECT COALESCE(SUM(qtde),0) AS total FROM distribuicao")).first()
+            sql_variants = [
+                "SELECT COALESCE(SUM(qtde),0) AS total FROM distribuicao",
+                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM distribuicao',
+                'SELECT COALESCE(SUM("TX_QTDE"),0) AS total FROM distribuicao',
+                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM public.distribuicao'
+            ]
+            r = try_scalar_query(db, sql_variants)
             distrib_sum = int(r.total) if r and getattr(r, 'total', None) is not None else 0
         except Exception:
             distrib_sum = 0
@@ -148,9 +182,13 @@ def get_timeseries(
             # Se não existirem registros na tabela timeseries, tentar agregar por
             # mês a partir da tabela `distribuicao` como fallback.
             try:
-                agg = db.execute(text(
-                    "SELECT ano, mes AS mês, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes"
-                )).all()
+                sql_variants = [
+                    "SELECT ano, mes AS mês, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes",
+                    'SELECT ano, mes AS mês, SUM("QTDE") AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
+                    'SELECT ano, mes AS mês, SUM("TX_QTDE") AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
+                    'SELECT ano, mes AS mês, SUM("QTDE") AS distribuídas FROM public.distribuicao GROUP BY ano, mes ORDER BY ano, mes',
+                ]
+                agg = try_query_all(db, sql_variants) or []
                 series = [
                     {
                         "ano": int(r.ano) if getattr(r, 'ano', None) is not None else 2021,
@@ -211,9 +249,12 @@ def get_ranking_ufs(
             # Se não houver snapshot, tentar agrupar por sigla a partir da tabela
             # `distribuicao` e retornar ranking por distribuídas.
             try:
-                agg = db.execute(text(
-                    "SELECT sigla AS uf, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY sigla ORDER BY SUM(qtde) DESC"
-                )).all()
+                sql_variants = [
+                    "SELECT sigla AS uf, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY sigla ORDER BY SUM(qtde) DESC",
+                    'SELECT "TX_SIGLA" AS uf, SUM("QTDE") AS distribuídas FROM distribuicao GROUP BY "TX_SIGLA" ORDER BY SUM("QTDE") DESC',
+                    'SELECT sigla AS uf, SUM("QTDE") AS distribuídas FROM public.distribuicao GROUP BY sigla ORDER BY SUM("QTDE") DESC'
+                ]
+                agg = try_query_all(db, sql_variants) or []
                 items = [
                     {
                         "uf": (r.uf.strip() if getattr(r, 'uf', None) else r.uf) if getattr(r, 'uf', None) is not None else None,

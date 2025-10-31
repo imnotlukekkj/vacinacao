@@ -1,8 +1,6 @@
-# Welcome to your Lovable project
+# Bem-vindo ao projeto de Vacinação
 
 ## Project info
-
-**URL**: https://lovable.dev/projects/569bbfc9-db8f-4928-9796-eb92067bf8c8
 
 # Vacinação — app de visualização
 
@@ -57,69 +55,90 @@ docker exec -i pg-temp psql -U postgres -d vacinacao -f /tmp/dados.sql
 # ou stream via stdin
 Get-Content .\dados.sql -Raw | docker exec -i pg-temp psql -U postgres -d vacinacao -f -
 ```
+# Bem-vindo ao projeto de Vacinação
 
-Verificações pós-import:
+Este repositório contém o frontend (React + Vite + TypeScript) e o backend (FastAPI) usados para visualizar dados de vacinação.
 
-```powershell
-docker exec -i pg-temp psql -U postgres -d vacinacao -c "SELECT COUNT(*) FILTER (WHERE trim(sigla) <> '') AS preenchidas, COUNT(*) AS total FROM distribuicao;"
-docker exec -i pg-temp psql -U postgres -d vacinacao -c "SELECT SUM(qtde) FROM distribuicao;"
+Resumo rápido
+- Frontend: Vite + React + TypeScript em `src/`
+- Backend: FastAPI em `backend/`
+- Banco de dados: usar Supabase (Postgres) — o projeto está preparado para se conectar via `DATABASE_URL` em `backend/.env`
+
+Pré-requisitos para desenvolvimento
+- Node.js (LTS) — para rodar o frontend
+- Python 3.10+ — para rodar o backend localmente
+- Cliente PostgreSQL (`psql`/`pg_restore`) opcional para importar dumps
+
+Configuração local (usar Supabase para o banco)
+1) Criar um projeto no Supabase e obter a `DATABASE_URL` (idealmente a string do Pooler se disponível).
+2) Colocar a string em `backend/.env`:
+
+```
+DATABASE_URL=postgresql://<user>:<pass>@<host>:5432/<db>?sslmode=require
 ```
 
-Frontend — executar em dev
-
-1) Instalar dependências:
+3) Backend — criar e ativar venv e instalar dependências:
 
 ```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+4) Iniciar o backend:
+
+```powershell
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
+```
+
+5) Frontend — instalar e rodar (em outro terminal):
+
+```powershell
+# na raiz do projeto
 npm install
-```
-
-2) Rodar em desenvolvimento (Vite):
-
-```powershell
 npm run dev
 ```
 
-Observação sobre variáveis do frontend
+Observações sobre variáveis do frontend
 - O frontend lê a URL da API por `import.meta.env.VITE_API_URL`. Para desenvolvimento, crie um arquivo `.env.local` com a variável:
 
 ```
-VITE_API_URL=http://localhost:8001
+VITE_API_URL=http://localhost:8002
 ```
 
-Backend — executar localmente (sem Docker)
-
-Se preferir rodar o backend localmente (Python):
+Importar um dump para o Supabase
+- Para arquivos grandes, prefira o painel do Supabase (SQL Editor / Backups).
+- Há um script pronto para ajudar a importar localmente via `psql`/`pg_restore`:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r backend/requirements.txt
-uvicorn backend.app.main:app --reload --port 8000
+# da raiz do projeto
+.\scripts\import_to_supabase.ps1 -FilePath .\dados.sql
 ```
 
-Observações importantes antes do deploy
+Ou manualmente com `psql`:
 
-- Migrations: atualmente não há Alembic configurado. Para produção, adicione migrations ou um script idempotente para criar as tabelas.
-- Dados: garanta que as colunas importantes (ex.: `sigla` em `distribuicao`) estejam corretas antes do deploy.
-- Secrets: não commit `DB_PASSWORD` ou segredos. Use variáveis de ambiente/secret manager no serviço de hosting.
-- Frontend: gere build (`npm run build`) e hospede o output estático (Netlify, Vercel ou Nginx). Configure `VITE_API_URL` no ambiente do host.
-- Backend: pode ser deployado como container (Render, Fly, Railway) ou como serviço Uvicorn/Gunicorn em VM.
+```powershell
+psql "postgresql://<user>:<pass>@<host>:5432/<db>?sslmode=require" -f .\dados.sql
+```
 
-Checklist rápido para publicar uma versão web
+Verificações pós-import (exemplo):
 
-1. Adicionar migrations / criar script `init_db` para criar tabelas.
-2. Importar dados (ou garantir DB de produção com os dados corretos).
-3. Configurar variáveis de ambiente no host (DB_URL, VITE_API_URL).
-4. Gerar build do frontend e publicar (Vercel/Netlify).  
-5. Publicar backend (container) e apontar frontend para a URL pública.
+```powershell
+psql "postgresql://<user>:<pass>@<host>:5432/<db>?sslmode=require" -c "SELECT COUNT(*) FROM public.distribuicao;"
+psql "postgresql://<user>:<pass>@<host>:5432/<db>?sslmode=require" -c "SELECT SUM(qtde) FROM public.distribuicao;"
+```
 
+Produção
+- Não commit `DATABASE_URL` ou segredos. Use variáveis de ambiente/secret manager no host.
+- Ajuste `DB_POOL_SIZE` e `DB_MAX_OVERFLOW` em `backend/.env` se necessário.
+- Para deploy do backend, publique um serviço que execute Uvicorn/Gunicorn apontando `DATABASE_URL` para seu Supabase.
+
+Ajuda
 Se quiser, eu posso:
-- adicionar um script de inicialização idempotente para criar tabelas básicas;
-- preparar um `frontend/.env.example` e `backend/.env.example` com variáveis necessárias;
-- ajudar a gerar o `docker-compose.prod.yml` ou um Dockerfile para o frontend.
-
-Contato / ajuda
-- Se quiser que eu atualize o `README` com instruções específicas do seu host (Vercel/Render/etc.) me diga qual serviço pretende usar.
+- criar `backend/.env.example`,
+- adicionar um endpoint de diagnóstico que tenta as variantes de consulta e retorna qual funcionou,
+- preparar scripts de deploy/CI que leiam a `DATABASE_URL` de um secret manager.
 
 ---
 Feito por você — instruções curtas e práticas para rodar e publicar.

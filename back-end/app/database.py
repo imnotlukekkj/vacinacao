@@ -30,6 +30,8 @@ DB_PORT = os.getenv("DB_PORT")
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_POOL_SIZE = os.getenv("DB_POOL_SIZE")
+DB_MAX_OVERFLOW = os.getenv("DB_MAX_OVERFLOW")
 
 if DB_USER and DB_PASSWORD and DB_HOST and DB_NAME:
     # Escapar a senha (caso contenha caracteres especiais)
@@ -42,7 +44,24 @@ else:
         "postgresql://user:password@localhost:5432/vacina_brasil"
     )
 
-engine = create_engine(DATABASE_URL)
+# Pool sizing: usar variáveis de ambiente quando fornecidas, senão defaults
+try:
+    pool_size = int(DB_POOL_SIZE) if DB_POOL_SIZE is not None else 5
+except ValueError:
+    pool_size = 5
+
+try:
+    max_overflow = int(DB_MAX_OVERFLOW) if DB_MAX_OVERFLOW is not None else 10
+except ValueError:
+    max_overflow = 10
+
+# Habilitar pool_pre_ping para evitar erros com conexões ociosas em servidores gerenciados
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=pool_size,
+    max_overflow=max_overflow,
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
