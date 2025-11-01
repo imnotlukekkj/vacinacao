@@ -215,6 +215,7 @@ def get_ranking_ufs(
     mes: Optional[str] = Query(None),
     uf: Optional[str] = Query(None),
     fabricante: Optional[str] = Query(None),
+    debug: Optional[int] = Query(0),
     db: Session = Depends(get_db)
 ):
     try:
@@ -259,6 +260,7 @@ def get_ranking_ufs(
                 ]
 
                 agg_rows = []
+                executed_sql = base_sql
                 # Tentar variante padrão
                 try:
                     agg_rows = db.execute(text(base_sql), params).all()
@@ -274,6 +276,7 @@ def get_ranking_ufs(
                                 sql = f"{sql} WHERE {' AND '.join(where_clauses)}"
                             sql = f"{sql} GROUP BY sigla ORDER BY SUM(CAST(\"QTDE\" AS numeric)) DESC"
                             agg_rows = db.execute(text(sql), params).all()
+                            executed_sql = sql
                             if agg_rows:
                                 break
                         except Exception:
@@ -289,6 +292,8 @@ def get_ranking_ufs(
                     }
                     for r in (agg_rows or [])
                 ]
+                if debug:
+                    return {"data": items, "success": True, "debug": {"sql": executed_sql, "rows": len(agg_rows)}}
             except Exception:
                 items = []
         else:
