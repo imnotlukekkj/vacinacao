@@ -109,38 +109,20 @@ def get_overview(
             ano_int = parse_int(ano)
             mes_int = parse_int(mes)
 
-            where_clauses = []
+            where = []
             params = {}
             if ano_int is not None:
-                where_clauses.append('"ano" = :ano')
+                where.append('"ANO" = :ano')
                 params['ano'] = ano_int
             if mes_int is not None:
-                where_clauses.append('"mes" = :mes')
+                where.append('"MES" = :mes')
                 params['mes'] = mes_int
 
-            base_sql = 'SELECT COALESCE(SUM(CAST("QTDE" AS numeric)),0) AS total FROM distribuicao_raw'
-            if where_clauses:
-                base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
+            base_sql = 'SELECT COALESCE(SUM(CAST("QTDE" AS numeric)),0) AS total FROM public.distribuicao_raw'
+            if where:
+                base_sql = f"{base_sql} WHERE {' AND '.join(where)}"
 
-            # Tentar variantes com diferentes cases/quoting de colunas e com schema
-            sql_variants = []
-            # forma original (pode conter "ano"/"mes" se os where_clauses tiverem)
-            sql_variants.append(base_sql)
-            # com schema qualificado
-            sql_variants.append(base_sql.replace('distribuicao_raw', 'public.distribuicao_raw'))
-            # variantes com nomes de coluna em maiúsculas (ex.: "ANO", "MES")
-            sql_variants.append(base_sql.replace('"ano"', '"ANO"').replace('"mes"', '"MES"'))
-            sql_variants.append(sql_variants[-1].replace('distribuicao_raw', 'public.distribuicao_raw'))
-
-            r = None
-            for sql in sql_variants:
-                try:
-                    r = db.execute(text(sql), params).first()
-                    if r is not None:
-                        break
-                except Exception:
-                    continue
-
+            r = db.execute(text(base_sql), params).first()
             total_distribuidas = int(r.total) if r and getattr(r, 'total', None) is not None else 0
         except Exception:
             # Se a tabela não existir ou houver erro, retornar zeros para não quebrar o frontend
@@ -196,63 +178,27 @@ def get_timeseries(
         records = query.all()
         
         if not records:
-            # Se não existirem registros na tabela timeseries, tentar agregar por
-            # mês a partir da tabela `distribuicao` como fallback.
+            # Se não existirem registros na tabela timeseries, agregar por
+            # mês a partir da tabela `distribuicao_raw` (variante com colunas
+            # em maiúsculas entre aspas — compatível com o seu dump).
             try:
-                # Construir SQL parametrizado para agregar por mês diretamente a partir
-                # da tabela `distribuicao_raw`. Aplicar filtros somente se fornecidos.
                 ano_int = parse_int(ano)
                 mes_int = parse_int(mes)
-                where_clauses = []
                 params = {}
+                where = []
                 if ano_int is not None:
-                    where_clauses.append('"ANO" = :ano')
+                    where.append('\"ANO\" = :ano')
                     params['ano'] = ano_int
                 if mes_int is not None:
-                    where_clauses.append('"MES" = :mes')
+                    where.append('\"MES\" = :mes')
                     params['mes'] = mes_int
-                if not is_unset(uf):
-                    # tentar duas colunas possíveis para sigla
-                    where_clauses.append('"SIGLA" = :uf')
-                    params['uf'] = uf
 
-                # Tentar explicitamente variantes começando por colunas entre aspas
-                # em maiúsculas (como sua consulta no Supabase), depois variantes
-                # sem aspas. Construímos as variantes e aplicamos os mesmos where
-                # parametrizados a cada uma.
-                variants = [
-                    'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw',
-                    'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
-                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
-                    'SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw',
-                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
-                ]
+                sql = 'SELECT \"ANO\" AS ano, \"MES\" AS mês, SUM(CAST(\"QTDE\" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                if where:
+                    sql = f"{sql} WHERE {' AND '.join(where)}"
+                sql = f"{sql} GROUP BY \\"ANO\\", \\"MES\\" ORDER BY \\"ANO\\", \\"MES\\""
 
-                agg_rows = []
-                for v in variants:
-                    try:
-                        sql = v
-                        if where_clauses:
-                            # ajustar where para a variante atual: substituir nomes entre aspas
-                            simple_where = [w for w in where_clauses]
-                            # se a variante usa colunas não-aspas, trocar
-                            if '"ANO"' in v or '"MES"' in v or '"SIGLA"' in v:
-                                sql_where = ' AND '.join(where_clauses)
-                            else:
-                                simple_where = [w.replace('"ANO"', 'ano').replace('"MES"', 'mes').replace('"SIGLA"', 'sigla') for w in where_clauses]
-                                sql_where = ' AND '.join(simple_where)
-                            sql = f"{sql} WHERE {sql_where}"
-                        # Ajustar GROUP BY conforme a variante (usar nomes entre aspas
-                        # quando a variante referenciar colunas maiúsculas entre aspas)
-                        if '"ANO"' in v or '"MES"' in v:
-                            sql = f"{sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
-                        else:
-                            sql = f"{sql} GROUP BY ano, mes ORDER BY ano, mes"
-                        agg_rows = db.execute(text(sql), params).all()
-                        if agg_rows:
-                            break
-                    except Exception:
-                        continue
+                agg_rows = db.execute(text(sql), params).all() or []
 
                 series = [
                     {
@@ -264,7 +210,7 @@ def get_timeseries(
                         "eficiência": 0.0,
                         "esavi": 0,
                     }
-                    for r in (agg_rows or [])
+                    for r in agg_rows
                 ]
             except Exception:
                 series = []
