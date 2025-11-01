@@ -242,7 +242,12 @@ def get_timeseries(
                                 simple_where = [w.replace('"ANO"', 'ano').replace('"MES"', 'mes').replace('"SIGLA"', 'sigla') for w in where_clauses]
                                 sql_where = ' AND '.join(simple_where)
                             sql = f"{sql} WHERE {sql_where}"
-                        sql = f"{sql} GROUP BY ano, mes ORDER BY ano, mes"
+                        # Ajustar GROUP BY conforme a variante (usar nomes entre aspas
+                        # quando a variante referenciar colunas maiúsculas entre aspas)
+                        if '"ANO"' in v or '"MES"' in v:
+                            sql = f"{sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
+                        else:
+                            sql = f"{sql} GROUP BY ano, mes ORDER BY ano, mes"
                         agg_rows = db.execute(text(sql), params).all()
                         if agg_rows:
                             break
