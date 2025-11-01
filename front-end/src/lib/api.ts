@@ -47,7 +47,21 @@ export async function getOverview(filters: Filters = {}): Promise<Overview> {
   if (filters.uf) params.uf = filters.uf;
   if (filters.fabricante) params.fabricante = filters.fabricante;
 
-  return fetchApi<Overview>('/overview', params);
+  // Buscar dados brutos e normalizar chaves (aceitar tanto 'distribuídas' quanto 'distribuidas')
+  const raw = await fetchApi<any>('/overview', params);
+
+  // Normalizar nomes de campos do backend para o formato esperado pelo frontend
+  const distribuidas = raw?.['distribuidas'] ?? raw?.['distribuídas'] ?? 0;
+  const aplicadas = raw?.['aplicadas'] ?? raw?.['aplicadas'] ?? 0;
+  const eficiencia = raw?.['eficiencia'] ?? raw?.['eficiência'] ?? 0.0;
+  const esavi = raw?.['esavi'] ?? raw?.['esavi'] ?? 0;
+
+  return {
+    'distribuídas': distribuidas,
+    aplicadas: aplicadas,
+    eficiência: eficiencia,
+    esavi: esavi,
+  } as Overview;
 }
 
 // Buscar série temporal
