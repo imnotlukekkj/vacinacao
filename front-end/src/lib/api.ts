@@ -47,7 +47,7 @@ export async function getOverview(filters: Filters = {}): Promise<Overview> {
   if (filters.uf) params.uf = filters.uf;
   if (filters.fabricante) params.fabricante = filters.fabricante;
 
-  return fetchApi<Overview>('/api/overview', params);
+  return fetchApi<Overview>('/overview', params);
 }
 
 // Buscar série temporal
@@ -59,7 +59,7 @@ export async function getTimeseries(filters: Filters = {}): Promise<TimePoint[]>
   if (filters.uf) params.uf = filters.uf;
   if (filters.fabricante) params.fabricante = filters.fabricante;
 
-  return fetchApi<TimePoint[]>('/api/timeseries', params);
+  return fetchApi<TimePoint[]>('/timeseries', params);
 }
 
 // Buscar ranking de UFs
@@ -71,7 +71,7 @@ export async function getRankingUfs(filters: Filters = {}): Promise<RankingUf[]>
   if (filters.uf) params.uf = filters.uf;
   if (filters.fabricante) params.fabricante = filters.fabricante;
 
-  return fetchApi<RankingUf[]>('/api/ranking/ufs', params);
+  return fetchApi<RankingUf[]>('/ranking/ufs', params);
 }
 
 // Hook personalizado para gerenciar estado de carregamento
