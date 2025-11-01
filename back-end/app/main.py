@@ -14,6 +14,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://vacinacao-delta.vercel.app",
+        "https://vacinacao-5lan.onrender.com",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:8081",
