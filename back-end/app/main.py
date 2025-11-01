@@ -122,11 +122,15 @@ def get_overview(
             if where_clauses:
                 base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
 
-            # Tentar executar com e sem schema qualificator se necessário
-            sql_variants = [
-                base_sql,
-                base_sql.replace('distribuicao_raw', 'public.distribuicao_raw'),
-            ]
+            # Tentar variantes com diferentes cases/quoting de colunas e com schema
+            sql_variants = []
+            # forma original (pode conter "ano"/"mes" se os where_clauses tiverem)
+            sql_variants.append(base_sql)
+            # com schema qualificado
+            sql_variants.append(base_sql.replace('distribuicao_raw', 'public.distribuicao_raw'))
+            # variantes com nomes de coluna em maiúsculas (ex.: "ANO", "MES")
+            sql_variants.append(base_sql.replace('"ano"', '"ANO"').replace('"mes"', '"MES"'))
+            sql_variants.append(sql_variants[-1].replace('distribuicao_raw', 'public.distribuicao_raw'))
 
             r = None
             for sql in sql_variants:
@@ -202,21 +206,20 @@ def get_timeseries(
                 where_clauses = []
                 params = {}
                 if ano_int is not None:
-                    where_clauses.append('ano = :ano')
+                    where_clauses.append('"ANO" = :ano')
                     params['ano'] = ano_int
                 if mes_int is not None:
-                    where_clauses.append('mes = :mes')
+                    where_clauses.append('"MES" = :mes')
                     params['mes'] = mes_int
                 if not is_unset(uf):
                     # tentar duas colunas possíveis para sigla
-                    # usaremos placeholder e incluiremos variantes no SQL variants
-                    where_clauses.append('sigla = :uf')
+                    where_clauses.append('"SIGLA" = :uf')
                     params['uf'] = uf
 
-                base_sql = 'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                base_sql = 'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
                 if where_clauses:
                     base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
-                base_sql = f"{base_sql} GROUP BY ano, mes ORDER BY ano, mes"
+                base_sql = f"{base_sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
 
                 agg_rows = []
                 try:
@@ -303,19 +306,19 @@ def get_ranking_ufs(
                 where_clauses = []
                 params = {}
                 if ano_int is not None:
-                    where_clauses.append('ano = :ano')
+                    where_clauses.append('"ANO" = :ano')
                     params['ano'] = ano_int
                 if mes_int is not None:
-                    where_clauses.append('mes = :mes')
+                    where_clauses.append('"MES" = :mes')
                     params['mes'] = mes_int
                 if not is_unset(uf):
-                    where_clauses.append('sigla = :uf')
+                    where_clauses.append('"SIGLA" = :uf')
                     params['uf'] = uf
 
-                base_sql = 'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                base_sql = 'SELECT "SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
                 if where_clauses:
                     base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
-                base_sql = f"{base_sql} GROUP BY sigla ORDER BY SUM(CAST(\"QTDE\" AS numeric)) DESC"
+                base_sql = f"{base_sql} GROUP BY \"SIGLA\" ORDER BY SUM(CAST(\"QTDE\" AS numeric)) DESC"
 
                 agg_rows = []
                 try:
