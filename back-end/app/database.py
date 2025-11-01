@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, Float, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
+from typing import Generator
 import os
 from dotenv import load_dotenv
 from pathlib import Path
@@ -93,7 +94,13 @@ class EstadoSnapshot(Base):
 
 
 # Helper para pegar a sessão do banco
-def get_db():
+def get_db() -> Generator[Session, None, None]:
+    """Dependency generator for FastAPI endpoints.
+
+    Creates a new SQLAlchemy Session for each request and ensures it is
+    closed after use. The Engine and SessionLocal factory live at module
+    level (they do not open a connection until a Session is created).
+    """
     db = SessionLocal()
     try:
         yield db
