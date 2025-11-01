@@ -193,7 +193,10 @@ def get_timeseries(
                     where.append('"MES" = :mes')
                     params['mes'] = mes_int
 
-                sql = 'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                # Use aliases sem acento para garantir compatibilidade com os nomes de
+                # colunas retornadas pelo driver; vamos mapear para as chaves com acento
+                # quando construirmos o JSON de resposta.
+                sql = 'SELECT "ANO" AS ano, "MES" AS mes, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM public.distribuicao_raw'
                 if where:
                     sql = f"{sql} WHERE {' AND '.join(where)}"
                 sql = f"{sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
@@ -203,9 +206,9 @@ def get_timeseries(
                 series = [
                     {
                         "ano": int(r.ano) if getattr(r, 'ano', None) is not None else 2021,
-                        "mês": int(r.mês) if getattr(r, 'mês', None) is not None else 0,
+                        "mês": int(r.mes) if getattr(r, 'mes', None) is not None else 0,
                         "uf": "BR",
-                        "distribuídas": int(r.distribuídas) if getattr(r, 'distribuídas', None) is not None else 0,
+                        "distribuídas": int(r.distribuidas) if getattr(r, 'distribuidas', None) is not None else 0,
                         "aplicadas": 0,
                         "eficiência": 0.0,
                         "esavi": 0,
@@ -271,7 +274,8 @@ def get_ranking_ufs(
                     where_clauses.append('"SIGLA" = :uf')
                     params['uf'] = uf
 
-                base_sql = 'SELECT "SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                # Usar alias sem acento para garantir que o driver exponha a coluna
+                base_sql = 'SELECT "SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM public.distribuicao_raw'
                 if where_clauses:
                     base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
                 base_sql = f"{base_sql} GROUP BY \"SIGLA\" ORDER BY SUM(CAST(\"QTDE\" AS numeric)) DESC"
@@ -281,9 +285,9 @@ def get_ranking_ufs(
                     agg_rows = db.execute(text(base_sql), params).all()
                 except Exception:
                     alt_variants = [
-                        "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw",
-                        'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
-                        'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw',
+                        "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuidas FROM distribuicao_raw",
+                        'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM distribuicao_raw',
+                        'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM public.distribuicao_raw',
                     ]
                     for v in alt_variants:
                         try:
@@ -301,7 +305,7 @@ def get_ranking_ufs(
                     {
                         "uf": (r.uf.strip() if getattr(r, 'uf', None) else r.uf) if getattr(r, 'uf', None) is not None else None,
                         "nome": None,
-                        "distribuídas": int(r.distribuídas) if getattr(r, 'distribuídas', None) is not None else 0,
+                        "distribuídas": int(r.distribuidas) if getattr(r, 'distribuidas', None) is not None else 0,
                         "aplicadas": 0,
                         "eficiência": 0.0,
                     }
