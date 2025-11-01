@@ -216,33 +216,38 @@ def get_timeseries(
                     where_clauses.append('"SIGLA" = :uf')
                     params['uf'] = uf
 
-                base_sql = 'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
-                if where_clauses:
-                    base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
-                base_sql = f"{base_sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
+                # Tentar explicitamente variantes começando por colunas entre aspas
+                # em maiúsculas (como sua consulta no Supabase), depois variantes
+                # sem aspas. Construímos as variantes e aplicamos os mesmos where
+                # parametrizados a cada uma.
+                variants = [
+                    'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw',
+                    'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
+                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
+                    'SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw',
+                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
+                ]
 
                 agg_rows = []
-                try:
-                    agg_rows = db.execute(text(base_sql), params).all()
-                except Exception:
-                    # tentar variantes com outras colunas/nomes
-                    alt_variants = [
-                        'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
-                        'SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw',
-                        'SELECT ano, mes AS mês, SUM(CAST("TX_QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
-                        'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw',
-                    ]
-                    for v in alt_variants:
-                        try:
-                            sql = v
-                            if where_clauses:
-                                sql = f"{sql} WHERE {' AND '.join(where_clauses)}"
-                            sql = f"{sql} GROUP BY ano, mes ORDER BY ano, mes"
-                            agg_rows = db.execute(text(sql), params).all()
-                            if agg_rows:
-                                break
-                        except Exception:
-                            continue
+                for v in variants:
+                    try:
+                        sql = v
+                        if where_clauses:
+                            # ajustar where para a variante atual: substituir nomes entre aspas
+                            simple_where = [w for w in where_clauses]
+                            # se a variante usa colunas não-aspas, trocar
+                            if '"ANO"' in v or '"MES"' in v or '"SIGLA"' in v:
+                                sql_where = ' AND '.join(where_clauses)
+                            else:
+                                simple_where = [w.replace('"ANO"', 'ano').replace('"MES"', 'mes').replace('"SIGLA"', 'sigla') for w in where_clauses]
+                                sql_where = ' AND '.join(simple_where)
+                            sql = f"{sql} WHERE {sql_where}"
+                        sql = f"{sql} GROUP BY ano, mes ORDER BY ano, mes"
+                        agg_rows = db.execute(text(sql), params).all()
+                        if agg_rows:
+                            break
+                    except Exception:
+                        continue
 
                 series = [
                     {
