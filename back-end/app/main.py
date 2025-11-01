@@ -195,29 +195,64 @@ def get_timeseries(
             # Se não existirem registros na tabela timeseries, tentar agregar por
             # mês a partir da tabela `distribuicao` como fallback.
             try:
-                sql_variants = [
-                    "SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes",
-                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes',
-                    'SELECT ano, mes AS mês, SUM(CAST("TX_QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes',
-                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes',
-                ]
-                agg = try_query_all(db, sql_variants) or []
+                # Construir SQL parametrizado para agregar por mês diretamente a partir
+                # da tabela `distribuicao_raw`. Aplicar filtros somente se fornecidos.
+                ano_int = parse_int(ano)
+                mes_int = parse_int(mes)
+                where_clauses = []
+                params = {}
+                if ano_int is not None:
+                    where_clauses.append('ano = :ano')
+                    params['ano'] = ano_int
+                if mes_int is not None:
+                    where_clauses.append('mes = :mes')
+                    params['mes'] = mes_int
+                if not is_unset(uf):
+                    # tentar duas colunas possíveis para sigla
+                    # usaremos placeholder e incluiremos variantes no SQL variants
+                    where_clauses.append('sigla = :uf')
+                    params['uf'] = uf
+
+                base_sql = 'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                if where_clauses:
+                    base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
+                base_sql = f"{base_sql} GROUP BY ano, mes ORDER BY ano, mes"
+
+                agg_rows = []
+                try:
+                    agg_rows = db.execute(text(base_sql), params).all()
+                except Exception:
+                    # tentar variantes com outras colunas/nomes
+                    alt_variants = [
+                        'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
+                        'SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw',
+                        'SELECT ano, mes AS mês, SUM(CAST("TX_QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
+                        'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw',
+                    ]
+                    for v in alt_variants:
+                        try:
+                            sql = v
+                            if where_clauses:
+                                sql = f"{sql} WHERE {' AND '.join(where_clauses)}"
+                            sql = f"{sql} GROUP BY ano, mes ORDER BY ano, mes"
+                            agg_rows = db.execute(text(sql), params).all()
+                            if agg_rows:
+                                break
+                        except Exception:
+                            continue
+
                 series = [
                     {
                         "ano": int(r.ano) if getattr(r, 'ano', None) is not None else 2021,
-                        "mês": int(r.mês),
+                        "mês": int(r.mês) if getattr(r, 'mês', None) is not None else 0,
                         "uf": "BR",
-                        "distribuídas": int(r.distribuídas),
+                        "distribuídas": int(r.distribuídas) if getattr(r, 'distribuídas', None) is not None else 0,
                         "aplicadas": 0,
                         "eficiência": 0.0,
                         "esavi": 0,
                     }
-                    for r in agg
+                    for r in (agg_rows or [])
                 ]
-                if not is_unset(mes):
-                    m = parse_int(mes)
-                    if m:
-                        series = [p for p in series if p["mês"] == m]
             except Exception:
                 series = []
         else:
@@ -262,21 +297,56 @@ def get_ranking_ufs(
             # Se não houver snapshot, tentar agrupar por sigla a partir da tabela
             # `distribuicao` e retornar ranking por distribuídas.
             try:
-                sql_variants = [
-                    "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY sigla ORDER BY SUM(CAST(qtde AS numeric)) DESC",
-                    'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY "TX_SIGLA" ORDER BY SUM(CAST("QTDE" AS numeric)) DESC',
-                    'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw GROUP BY sigla ORDER BY SUM(CAST("QTDE" AS numeric)) DESC'
-                ]
-                agg = try_query_all(db, sql_variants) or []
+                # Construir SQL parametrizado para agrupar por UF na tabela distribucao_raw
+                ano_int = parse_int(ano)
+                mes_int = parse_int(mes)
+                where_clauses = []
+                params = {}
+                if ano_int is not None:
+                    where_clauses.append('ano = :ano')
+                    params['ano'] = ano_int
+                if mes_int is not None:
+                    where_clauses.append('mes = :mes')
+                    params['mes'] = mes_int
+                if not is_unset(uf):
+                    where_clauses.append('sigla = :uf')
+                    params['uf'] = uf
+
+                base_sql = 'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                if where_clauses:
+                    base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
+                base_sql = f"{base_sql} GROUP BY sigla ORDER BY SUM(CAST(\"QTDE\" AS numeric)) DESC"
+
+                agg_rows = []
+                try:
+                    agg_rows = db.execute(text(base_sql), params).all()
+                except Exception:
+                    alt_variants = [
+                        "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw",
+                        'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw',
+                        'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw',
+                    ]
+                    for v in alt_variants:
+                        try:
+                            sql = v
+                            if where_clauses:
+                                sql = f"{sql} WHERE {' AND '.join(where_clauses)}"
+                            sql = f"{sql} GROUP BY sigla ORDER BY SUM(CAST(\"QTDE\" AS numeric)) DESC"
+                            agg_rows = db.execute(text(sql), params).all()
+                            if agg_rows:
+                                break
+                        except Exception:
+                            continue
+
                 items = [
                     {
                         "uf": (r.uf.strip() if getattr(r, 'uf', None) else r.uf) if getattr(r, 'uf', None) is not None else None,
                         "nome": None,
-                        "distribuídas": int(r.distribuídas),
+                        "distribuídas": int(r.distribuídas) if getattr(r, 'distribuídas', None) is not None else 0,
                         "aplicadas": 0,
                         "eficiência": 0.0,
                     }
-                    for r in agg
+                    for r in (agg_rows or [])
                 ]
             except Exception:
                 items = []

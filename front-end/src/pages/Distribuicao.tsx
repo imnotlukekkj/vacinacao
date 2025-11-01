@@ -18,7 +18,9 @@ import { Filters, TimePoint, RankingUf } from "@/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export function Distribuicao() {
-  const [filters, setFilters] = useState<Filters>({});
+  // Inicializar os filtros com os mesmos defaults do FilterBar para
+  // que a página carregue dados imediatamente (ano 2024 por padrão).
+  const [filters, setFilters] = useState<Filters>({ ano: '2024', mes: 'todos', uf: 'todos', fabricante: 'todos' });
   const [timeseries, setTimeseries] = useState<TimePoint[]>([]);
   const [ranking, setRanking] = useState<RankingUf[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,7 +63,7 @@ export function Distribuicao() {
         </p>
       </div>
 
-      <FilterBar />
+  <FilterBar onFilterChange={(f) => setFilters(f as Filters)} />
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="shadow-lg border-0">
