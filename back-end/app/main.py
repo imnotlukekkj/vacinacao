@@ -384,3 +384,29 @@ def health():
     return {"ok": True}
 
 
+# Endpoint de diagnóstico temporário: retorna soma direta da tabela distribuicao_raw
+@app.get("/debug/distrib_total")
+def debug_distrib_total(ano: Optional[str] = Query(None), mes: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    try:
+        ano_int = parse_int(ano)
+        mes_int = parse_int(mes)
+        where = []
+        params = {}
+        if ano_int is not None:
+            where.append('"ANO" = :ano')
+            params['ano'] = ano_int
+        if mes_int is not None:
+            where.append('"MES" = :mes')
+            params['mes'] = mes_int
+
+        sql = 'SELECT COALESCE(SUM("QTDE"),0) AS total FROM public.distribuicao_raw'
+        if where:
+            sql = f"{sql} WHERE {' AND '.join(where)}"
+
+        r = db.execute(text(sql), params).first()
+        total = int(r.total) if r and getattr(r, 'total', None) is not None else 0
+        return {"data": {"total": total}, "success": True}
+    except Exception as e:
+        return {"data": {"total": 0}, "success": True, "message": str(e)}
+
+
