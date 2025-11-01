@@ -251,15 +251,22 @@ def get_ranking_ufs(
                     base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
                 base_sql = f"{base_sql} GROUP BY \"SIGLA\" ORDER BY SUM(CAST(\"QTDE\" AS numeric)) DESC"
 
+                # Variantes alternativas caso a coluna tenha nome diferente no dump
+                alt_variants = [
+                    "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuidas FROM distribuicao_raw",
+                    'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM distribuicao_raw',
+                    'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM public.distribuicao_raw',
+                ]
+
                 agg_rows = []
+                # Tentar variante padrão
                 try:
                     agg_rows = db.execute(text(base_sql), params).all()
                 except Exception:
-                    alt_variants = [
-                        "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuidas FROM distribuicao_raw",
-                        'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM distribuicao_raw',
-                        'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM public.distribuicao_raw',
-                    ]
+                    agg_rows = []
+
+                # Se não trouxe resultados, tentar variantes alternativas (sem depender de exceção)
+                if not agg_rows:
                     for v in alt_variants:
                         try:
                             sql = v
