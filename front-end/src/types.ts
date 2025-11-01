@@ -8,9 +8,9 @@ export interface Filters {
 }
 
 export interface Overview {
-  distribuídas: number;
+  distribuidas: number;
   aplicadas: number;
-  eficiência: number; // percentual
+  eficiencia: number; // percentual
   esavi: number;
 }
 

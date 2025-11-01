@@ -1,11 +1,12 @@
 import { Overview } from "@/types";
 
 export function Kpis({ data }: { data?: Overview }) {
-  const k = data ?? { distribuídas: 0, aplicadas: 0, eficiência: 0, esavi: 0 };
+  const k = data ?? { distribuidas: 0, aplicadas: 0, eficiencia: 0, esavi: 0 };
   const items = [
     { 
       label: "Doses Distribuídas", 
-      value: `${(k.distribuídas / 1000000).toFixed(1)}M`,
+      // Usar a chave 'distribuidas' (sem acento) para total de doses
+      value: `${(k.distribuidas / 1000000).toFixed(1)}M`,
       subtitle: "Total acumulado",
       bgColor: "bg-blue-600",
       textColor: "text-white",
@@ -21,7 +22,7 @@ export function Kpis({ data }: { data?: Overview }) {
     },
     { 
       label: "Eficiência", 
-      value: `${k.eficiência.toFixed(1)}%`,
+      value: `${k.eficiencia.toFixed(1)}%`,
       subtitle: "Aplicadas / Distribuídas",
       bgColor: "bg-orange-400",
       textColor: "text-white",

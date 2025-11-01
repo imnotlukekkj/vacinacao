@@ -52,14 +52,14 @@ export async function getOverview(filters: Filters = {}): Promise<Overview> {
 
   // Normalizar nomes de campos do backend para o formato esperado pelo frontend
   const distribuidas = raw?.['distribuidas'] ?? raw?.['distribuídas'] ?? 0;
-  const aplicadas = raw?.['aplicadas'] ?? raw?.['aplicadas'] ?? 0;
+  const aplicadas = raw?.['aplicadas'] ?? 0;
   const eficiencia = raw?.['eficiencia'] ?? raw?.['eficiência'] ?? 0.0;
-  const esavi = raw?.['esavi'] ?? raw?.['esavi'] ?? 0;
+  const esavi = raw?.['esavi'] ?? 0;
 
   return {
-    'distribuídas': distribuidas,
+    distribuidas: distribuidas,
     aplicadas: aplicadas,
-    eficiência: eficiencia,
+    eficiencia: eficiencia,
     esavi: esavi,
   } as Overview;
 }
