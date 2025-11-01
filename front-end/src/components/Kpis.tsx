@@ -2,11 +2,21 @@ import { Overview } from "@/types";
 
 export function Kpis({ data }: { data?: Overview }) {
   const k = data ?? { distribuidas: 0, aplicadas: 0, eficiencia: 0, esavi: 0 };
+
+  function formatLargeNumber(n: number) {
+    if (n === null || n === undefined) return '0';
+    const num = Number(n) || 0;
+    if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)} B`;
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)} M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)} K`;
+    return num.toLocaleString();
+  }
+
   const items = [
     { 
       label: "Doses Distribuídas", 
       // Usar a chave 'distribuidas' (sem acento) para total de doses
-      value: `${(k.distribuidas / 1000000).toFixed(1)}M`,
+      value: formatLargeNumber(k.distribuidas),
       subtitle: "Total acumulado",
       bgColor: "bg-blue-600",
       textColor: "text-white",
@@ -14,7 +24,7 @@ export function Kpis({ data }: { data?: Overview }) {
     },
     { 
       label: "Doses Aplicadas", 
-      value: `${(k.aplicadas / 1000000).toFixed(1)}M`,
+      value: formatLargeNumber(k.aplicadas),
       subtitle: "Total acumulado",
       bgColor: "bg-green-600",
       textColor: "text-white",

@@ -104,14 +104,39 @@ def get_overview(
         state_items = query.all()
         
         # Agregação direta da tabela `distribuicao_raw` — somar apenas a coluna QTDE
+        # Aplicar filtros ANO/MES apenas se fornecidos e válidos (números)
         try:
+            ano_int = parse_int(ano)
+            mes_int = parse_int(mes)
+
+            where_clauses = []
+            params = {}
+            if ano_int is not None:
+                where_clauses.append('"ano" = :ano')
+                params['ano'] = ano_int
+            if mes_int is not None:
+                where_clauses.append('"mes" = :mes')
+                params['mes'] = mes_int
+
+            base_sql = 'SELECT COALESCE(SUM(CAST("QTDE" AS numeric)),0) AS total FROM distribuicao_raw'
+            if where_clauses:
+                base_sql = f"{base_sql} WHERE {' AND '.join(where_clauses)}"
+
+            # Tentar executar com e sem schema qualificator se necessário
             sql_variants = [
-                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM distribuicao_raw',
-                'SELECT COALESCE(SUM(QTDE),0) AS total FROM distribuicao_raw',
-                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM public.distribuicao_raw',
-                'SELECT COALESCE(SUM(QTDE),0) AS total FROM public.distribuicao_raw',
+                base_sql,
+                base_sql.replace('distribuicao_raw', 'public.distribuicao_raw'),
             ]
-            r = try_scalar_query(db, sql_variants)
+
+            r = None
+            for sql in sql_variants:
+                try:
+                    r = db.execute(text(sql), params).first()
+                    if r is not None:
+                        break
+                except Exception:
+                    continue
+
             total_distribuidas = int(r.total) if r and getattr(r, 'total', None) is not None else 0
         except Exception:
             # Se a tabela não existir ou houver erro, retornar zeros para não quebrar o frontend
@@ -149,18 +174,19 @@ def get_timeseries(
     db: Session = Depends(get_db)
 ):
     try:
-        ano_val = parse_int(ano) or 2021
-        uf_val = uf if not is_unset(uf) else "BR"
-        
-        # Consultar timeseries do banco
-        query = db.query(TimePoint).filter(
-            TimePoint.ano == ano_val,
-            TimePoint.uf == uf_val
-        )
-        
+        ano_val = parse_int(ano)
+        # Não aplicar filtro de ano/uf/mes automaticamente — somente se fornecidos
+        query = db.query(TimePoint)
+
+        if ano_val is not None:
+            query = query.filter(TimePoint.ano == ano_val)
+
+        if not is_unset(uf):
+            query = query.filter(TimePoint.uf == uf)
+
         if not is_unset(mes):
             m = parse_int(mes)
-            if m:
+            if m is not None:
                 query = query.filter(TimePoint.mês == m)
         
         records = query.all()
@@ -170,10 +196,10 @@ def get_timeseries(
             # mês a partir da tabela `distribuicao` como fallback.
             try:
                 sql_variants = [
-                    "SELECT ano, mes AS mês, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes",
-                    'SELECT ano, mes AS mês, SUM("QTDE") AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
-                    'SELECT ano, mes AS mês, SUM("TX_QTDE") AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
-                    'SELECT ano, mes AS mês, SUM("QTDE") AS distribuídas FROM public.distribuicao GROUP BY ano, mes ORDER BY ano, mes',
+                    "SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes",
+                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
+                    'SELECT ano, mes AS mês, SUM(CAST("TX_QTDE" AS numeric)) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
+                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao GROUP BY ano, mes ORDER BY ano, mes',
                 ]
                 agg = try_query_all(db, sql_variants) or []
                 series = [
@@ -237,9 +263,9 @@ def get_ranking_ufs(
             # `distribuicao` e retornar ranking por distribuídas.
             try:
                 sql_variants = [
-                    "SELECT sigla AS uf, SUM(qtde) AS distribuídas FROM distribuicao GROUP BY sigla ORDER BY SUM(qtde) DESC",
-                    'SELECT "TX_SIGLA" AS uf, SUM("QTDE") AS distribuídas FROM distribuicao GROUP BY "TX_SIGLA" ORDER BY SUM("QTDE") DESC',
-                    'SELECT sigla AS uf, SUM("QTDE") AS distribuídas FROM public.distribuicao GROUP BY sigla ORDER BY SUM("QTDE") DESC'
+                    "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao GROUP BY sigla ORDER BY SUM(CAST(qtde AS numeric)) DESC",
+                    'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao GROUP BY "TX_SIGLA" ORDER BY SUM(CAST("QTDE" AS numeric)) DESC',
+                    'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao GROUP BY sigla ORDER BY SUM(CAST("QTDE" AS numeric)) DESC'
                 ]
                 agg = try_query_all(db, sql_variants) or []
                 items = [
