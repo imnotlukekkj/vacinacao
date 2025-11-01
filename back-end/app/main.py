@@ -157,6 +157,7 @@ def get_timeseries(
     mes: Optional[str] = Query(None),
     uf: Optional[str] = Query(None),
     fabricante: Optional[str] = Query(None),
+    debug: Optional[int] = Query(0),
     db: Session = Depends(get_db)
 ):
     try:
@@ -215,6 +216,14 @@ def get_timeseries(
                     }
                     for r in agg_rows
                 ]
+                # Se o parâmetro debug foi solicitado, inclua informações
+                # úteis para diagnóstico (SQL usado e número de linhas)
+                if debug:
+                    return {
+                        "data": series,
+                        "success": True,
+                        "debug": {"sql": sql, "rows": len(agg_rows)},
+                    }
             except Exception:
                 series = []
         else:
