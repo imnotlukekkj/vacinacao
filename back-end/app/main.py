@@ -103,39 +103,24 @@ def get_overview(
         
         state_items = query.all()
         
-        # Preferir agregar diretamente da tabela `distribuicao` se ela existir e
-        # tiver dados — isso garante que o frontend mostre números reais.
+        # Agregação direta da tabela `distribuicao_raw` — somar apenas a coluna QTDE
         try:
             sql_variants = [
-                "SELECT COALESCE(SUM(qtde),0) AS total FROM distribuicao",
-                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM distribuicao',
-                'SELECT COALESCE(SUM("TX_QTDE"),0) AS total FROM distribuicao',
-                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM public.distribuicao'
+                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM distribuicao_raw',
+                'SELECT COALESCE(SUM(QTDE),0) AS total FROM distribuicao_raw',
+                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM public.distribuicao_raw',
+                'SELECT COALESCE(SUM(QTDE),0) AS total FROM public.distribuicao_raw',
             ]
             r = try_scalar_query(db, sql_variants)
-            distrib_sum = int(r.total) if r and getattr(r, 'total', None) is not None else 0
+            total_distribuidas = int(r.total) if r and getattr(r, 'total', None) is not None else 0
         except Exception:
-            distrib_sum = 0
-
-        if distrib_sum > 0:
-            total_distribuidas = distrib_sum
-            total_aplicadas = 0
-            eficiencia = 0.0
-            esavi = 0
-        elif not state_items:
-            # Sem dados no banco -> retornar valores vazios/zeros conforme solicitado
+            # Se a tabela não existir ou houver erro, retornar zeros para não quebrar o frontend
             total_distribuidas = 0
-            total_aplicadas = 0
-            eficiencia = 0.0
-            esavi = 0
-        else:
-            # Calcular totais a partir dos dados do banco (estado snapshot)
-            total_distribuidas = sum(s.distribuídas for s in state_items) or 1
-            total_aplicadas = sum(s.aplicadas for s in state_items)
-            eficiencia = round((total_aplicadas / total_distribuidas) * 100, 1)
-            # Buscar ESAVI total do banco se disponível
-            esavi_query = db.query(func.sum(TimePoint.esavi)).scalar()
-            esavi = int(esavi_query) if esavi_query else 0
+
+        # Para esse diagnóstico/ajuste, manter os demais campos como zero para evitar quebra no frontend
+        total_aplicadas = 0
+        eficiencia = 0.0
+        esavi = 0
         
         overview = {
             "distribuídas": total_distribuidas,
