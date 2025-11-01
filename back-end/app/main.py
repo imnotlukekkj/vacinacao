@@ -161,85 +161,47 @@ def get_timeseries(
     db: Session = Depends(get_db)
 ):
     try:
-        ano_val = parse_int(ano)
-        # Não aplicar filtro de ano/uf/mes automaticamente — somente se fornecidos
-        query = db.query(TimePoint)
-
-        if ano_val is not None:
-            query = query.filter(TimePoint.ano == ano_val)
-
+        # Para evitar depender do snapshot `timeseries` (vazia no deploy),
+        # consultar diretamente a tabela `distribuicao_raw` usando a mesma
+        # SQL testada no endpoint de debug. Isso garante que o frontend
+        # receba dados consistentes filtrados por ano/mes/uf quando
+        # disponíveis no dump.
+        ano_int = parse_int(ano)
+        mes_int = parse_int(mes)
+        params = {}
+        where = []
+        if ano_int is not None:
+            where.append('"ANO" = :ano')
+            params['ano'] = ano_int
+        if mes_int is not None:
+            where.append('"MES" = :mes')
+            params['mes'] = mes_int
         if not is_unset(uf):
-            query = query.filter(TimePoint.uf == uf)
+            where.append('"SIGLA" = :uf')
+            params['uf'] = uf
 
-        if not is_unset(mes):
-            m = parse_int(mes)
-            if m is not None:
-                query = query.filter(TimePoint.mês == m)
-        
-        records = query.all()
-        
-        if not records:
-            # Se não existirem registros na tabela timeseries, agregar por
-            # mês a partir da tabela `distribuicao_raw` (variante com colunas
-            # em maiúsculas entre aspas — compatível com o seu dump).
-            try:
-                ano_int = parse_int(ano)
-                mes_int = parse_int(mes)
-                params = {}
-                where = []
-                if ano_int is not None:
-                    where.append('"ANO" = :ano')
-                    params['ano'] = ano_int
-                if mes_int is not None:
-                    where.append('"MES" = :mes')
-                    params['mes'] = mes_int
+        sql = 'SELECT "ANO" AS ano, "MES" AS mes, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM public.distribuicao_raw'
+        if where:
+            sql = f"{sql} WHERE {' AND '.join(where)}"
+        sql = f"{sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
 
-                # Use aliases sem acento para garantir compatibilidade com os nomes de
-                # colunas retornadas pelo driver; vamos mapear para as chaves com acento
-                # quando construirmos o JSON de resposta.
-                sql = 'SELECT "ANO" AS ano, "MES" AS mes, SUM(CAST("QTDE" AS numeric)) AS distribuidas FROM public.distribuicao_raw'
-                if where:
-                    sql = f"{sql} WHERE {' AND '.join(where)}"
-                sql = f"{sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
+        agg_rows = db.execute(text(sql), params).all() or []
 
-                agg_rows = db.execute(text(sql), params).all() or []
+        series = [
+            {
+                "ano": int(r.ano) if getattr(r, 'ano', None) is not None else 2021,
+                "mês": int(r.mes) if getattr(r, 'mes', None) is not None else 0,
+                "uf": (params.get('uf') if params.get('uf') is not None else 'BR'),
+                "distribuídas": int(r.distribuidas) if getattr(r, 'distribuidas', None) is not None else 0,
+                "aplicadas": 0,
+                "eficiência": 0.0,
+                "esavi": 0,
+            }
+            for r in agg_rows
+        ]
 
-                series = [
-                    {
-                        "ano": int(r.ano) if getattr(r, 'ano', None) is not None else 2021,
-                        "mês": int(r.mes) if getattr(r, 'mes', None) is not None else 0,
-                        "uf": "BR",
-                        "distribuídas": int(r.distribuidas) if getattr(r, 'distribuidas', None) is not None else 0,
-                        "aplicadas": 0,
-                        "eficiência": 0.0,
-                        "esavi": 0,
-                    }
-                    for r in agg_rows
-                ]
-                # Se o parâmetro debug foi solicitado, inclua informações
-                # úteis para diagnóstico (SQL usado e número de linhas)
-                if debug:
-                    return {
-                        "data": series,
-                        "success": True,
-                        "debug": {"sql": sql, "rows": len(agg_rows)},
-                    }
-            except Exception:
-                series = []
-        else:
-            # Converter objetos do banco para dicts
-            series = [
-                {
-                    "ano": r.ano,
-                    "mês": r.mês,
-                    "uf": r.uf,
-                    "distribuídas": r.distribuídas,
-                    "aplicadas": r.aplicadas,
-                    "eficiência": round(r.eficiência, 1),
-                    "esavi": r.esavi,
-                }
-                for r in records
-            ]
+        if debug:
+            return {"data": series, "success": True, "debug": {"sql": sql, "rows": len(agg_rows)}}
         
         return {"data": series, "success": True}
     except Exception:
