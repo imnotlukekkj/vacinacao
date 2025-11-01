@@ -95,60 +95,63 @@ def get_overview(
     db: Session = Depends(get_db)
 ):
     try:
-        # DEBUG MODE: ignorar filtros de ano/mes/uf/fabricante e agregar
-        # diretamente da tabela `distribuicao` para confirmar que a
-        # conexão e agregação de dados funcionam.
+        # Consultar snapshot dos estados
+        query = db.query(EstadoSnapshot)
+        
+        if not is_unset(uf):
+            query = query.filter(EstadoSnapshot.uf == uf)
+        
+        state_items = query.all()
+        
+        # Preferir agregar diretamente da tabela `distribuicao` se ela existir e
+        # tiver dados — isso garante que o frontend mostre números reais.
         try:
-            sql_distrib = [
+            sql_variants = [
                 "SELECT COALESCE(SUM(qtde),0) AS total FROM distribuicao",
                 'SELECT COALESCE(SUM("QTDE"),0) AS total FROM distribuicao',
                 'SELECT COALESCE(SUM("TX_QTDE"),0) AS total FROM distribuicao',
-                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM public.distribuicao',
+                'SELECT COALESCE(SUM("QTDE"),0) AS total FROM public.distribuicao'
             ]
-            r = try_scalar_query(db, sql_distrib)
-            total_distribuidas = int(r.total) if r and getattr(r, 'total', None) is not None else 0
+            r = try_scalar_query(db, sql_variants)
+            distrib_sum = int(r.total) if r and getattr(r, 'total', None) is not None else 0
         except Exception:
-            total_distribuidas = 0
+            distrib_sum = 0
 
-        try:
-            sql_aplic = [
-                "SELECT COALESCE(SUM(aplicadas),0) AS total FROM distribuicao",
-                'SELECT COALESCE(SUM("APLICADAS"),0) AS total FROM distribuicao',
-                'SELECT COALESCE(SUM("TX_APLICADAS"),0) AS total FROM distribuicao',
-                'SELECT COALESCE(SUM("APLICADAS"),0) AS total FROM public.distribuicao',
-            ]
-            r2 = try_scalar_query(db, sql_aplic)
-            total_aplicadas = int(r2.total) if r2 and getattr(r2, 'total', None) is not None else 0
-        except Exception:
+        if distrib_sum > 0:
+            total_distribuidas = distrib_sum
             total_aplicadas = 0
-
-        # Calcular eficiência (protegendo divisão por zero)
-        eficiencia = round((total_aplicadas / total_distribuidas) * 100, 1) if total_distribuidas > 0 else 0.0
-
-        # ESAVI: tentar agregar da tabela distribuicao (se existir) ou fallback para 0
-        try:
-            sql_esavi = [
-                "SELECT COALESCE(SUM(esavi),0) AS total FROM distribuicao",
-                'SELECT COALESCE(SUM("ESAVI"),0) AS total FROM distribuicao',
-                'SELECT COALESCE(SUM("TX_ESAVI"),0) AS total FROM distribuicao',
-                'SELECT COALESCE(SUM("ESAVI"),0) AS total FROM public.distribuicao',
-            ]
-            r3 = try_scalar_query(db, sql_esavi)
-            esavi = int(r3.total) if r3 and getattr(r3, 'total', None) is not None else 0
-        except Exception:
+            eficiencia = 0.0
             esavi = 0
-
+        elif not state_items:
+            # Sem dados no banco -> retornar valores vazios/zeros conforme solicitado
+            total_distribuidas = 0
+            total_aplicadas = 0
+            eficiencia = 0.0
+            esavi = 0
+        else:
+            # Calcular totais a partir dos dados do banco (estado snapshot)
+            total_distribuidas = sum(s.distribuídas for s in state_items) or 1
+            total_aplicadas = sum(s.aplicadas for s in state_items)
+            eficiencia = round((total_aplicadas / total_distribuidas) * 100, 1)
+            # Buscar ESAVI total do banco se disponível
+            esavi_query = db.query(func.sum(TimePoint.esavi)).scalar()
+            esavi = int(esavi_query) if esavi_query else 0
+        
         overview = {
             "distribuídas": total_distribuidas,
             "aplicadas": total_aplicadas,
             "eficiência": eficiencia,
             "esavi": esavi,
         }
-
         return {"data": overview, "success": True}
     except Exception:
-        # Em caso de erro de consulta, retornar zeros para não expor detalhes
-        overview = {"distribuídas": 0, "aplicadas": 0, "eficiência": 0.0, "esavi": 0}
+        # Em caso de erro de consulta, retornar valores vazios/zeros para não expor mocks
+        overview = {
+            "distribuídas": 0,
+            "aplicadas": 0,
+            "eficiência": 0.0,
+            "esavi": 0,
+        }
         return {"data": overview, "success": True}
 
 

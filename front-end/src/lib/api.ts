@@ -41,11 +41,17 @@ async function fetchApi<T>(endpoint: string, params?: Record<string, string | nu
 // Buscar dados de overview (KPIs)
 export async function getOverview(filters: Filters = {}): Promise<Overview> {
   const params: Record<string, string | number | boolean | undefined> = {};
-  
-  if (filters.ano) params.ano = filters.ano;
-  if (filters.mes) params.mes = filters.mes;
-  if (filters.uf) params.uf = filters.uf;
-  if (filters.fabricante) params.fabricante = filters.fabricante;
+
+  const shouldInclude = (v: any) => {
+    if (v === undefined || v === null) return false;
+    if (typeof v === 'string' && v.trim().toLowerCase() === 'todos') return false;
+    return true;
+  };
+
+  if (shouldInclude(filters.ano)) params.ano = filters.ano;
+  if (shouldInclude(filters.mes)) params.mes = filters.mes;
+  if (shouldInclude(filters.uf)) params.uf = filters.uf;
+  if (shouldInclude(filters.fabricante)) params.fabricante = filters.fabricante;
 
   // Buscar dados brutos e normalizar chaves (aceitar tanto 'distribuídas' quanto 'distribuidas')
   const raw = await fetchApi<any>('/overview', params);
@@ -67,11 +73,16 @@ export async function getOverview(filters: Filters = {}): Promise<Overview> {
 // Buscar série temporal
 export async function getTimeseries(filters: Filters = {}): Promise<TimePoint[]> {
   const params: Record<string, string | number | boolean | undefined> = {};
-  
-  if (filters.ano) params.ano = filters.ano;
-  if (filters.mes) params.mes = filters.mes;
-  if (filters.uf) params.uf = filters.uf;
-  if (filters.fabricante) params.fabricante = filters.fabricante;
+  const shouldInclude = (v: any) => {
+    if (v === undefined || v === null) return false;
+    if (typeof v === 'string' && v.trim().toLowerCase() === 'todos') return false;
+    return true;
+  };
+
+  if (shouldInclude(filters.ano)) params.ano = filters.ano;
+  if (shouldInclude(filters.mes)) params.mes = filters.mes;
+  if (shouldInclude(filters.uf)) params.uf = filters.uf;
+  if (shouldInclude(filters.fabricante)) params.fabricante = filters.fabricante;
 
   return fetchApi<TimePoint[]>('/timeseries', params);
 }
@@ -79,11 +90,16 @@ export async function getTimeseries(filters: Filters = {}): Promise<TimePoint[]>
 // Buscar ranking de UFs
 export async function getRankingUfs(filters: Filters = {}): Promise<RankingUf[]> {
   const params: Record<string, string | number | boolean | undefined> = {};
-  
-  if (filters.ano) params.ano = filters.ano;
-  if (filters.mes) params.mes = filters.mes;
-  if (filters.uf) params.uf = filters.uf;
-  if (filters.fabricante) params.fabricante = filters.fabricante;
+  const shouldInclude = (v: any) => {
+    if (v === undefined || v === null) return false;
+    if (typeof v === 'string' && v.trim().toLowerCase() === 'todos') return false;
+    return true;
+  };
+
+  if (shouldInclude(filters.ano)) params.ano = filters.ano;
+  if (shouldInclude(filters.mes)) params.mes = filters.mes;
+  if (shouldInclude(filters.uf)) params.uf = filters.uf;
+  if (shouldInclude(filters.fabricante)) params.fabricante = filters.fabricante;
 
   return fetchApi<RankingUf[]>('/ranking/ufs', params);
 }
