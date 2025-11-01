@@ -196,10 +196,10 @@ def get_timeseries(
             # mês a partir da tabela `distribuicao` como fallback.
             try:
                 sql_variants = [
-                    "SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes",
-                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
-                    'SELECT ano, mes AS mês, SUM(CAST("TX_QTDE" AS numeric)) AS distribuídas FROM distribuicao GROUP BY ano, mes ORDER BY ano, mes',
-                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao GROUP BY ano, mes ORDER BY ano, mes',
+                    "SELECT ano, mes AS mês, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes",
+                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes',
+                    'SELECT ano, mes AS mês, SUM(CAST("TX_QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes',
+                    'SELECT ano, mes AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw GROUP BY ano, mes ORDER BY ano, mes',
                 ]
                 agg = try_query_all(db, sql_variants) or []
                 series = [
@@ -263,9 +263,9 @@ def get_ranking_ufs(
             # `distribuicao` e retornar ranking por distribuídas.
             try:
                 sql_variants = [
-                    "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao GROUP BY sigla ORDER BY SUM(CAST(qtde AS numeric)) DESC",
-                    'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao GROUP BY "TX_SIGLA" ORDER BY SUM(CAST("QTDE" AS numeric)) DESC',
-                    'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao GROUP BY sigla ORDER BY SUM(CAST("QTDE" AS numeric)) DESC'
+                    "SELECT sigla AS uf, SUM(CAST(qtde AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY sigla ORDER BY SUM(CAST(qtde AS numeric)) DESC",
+                    'SELECT "TX_SIGLA" AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM distribuicao_raw GROUP BY "TX_SIGLA" ORDER BY SUM(CAST("QTDE" AS numeric)) DESC',
+                    'SELECT sigla AS uf, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw GROUP BY sigla ORDER BY SUM(CAST("QTDE" AS numeric)) DESC'
                 ]
                 agg = try_query_all(db, sql_variants) or []
                 items = [
