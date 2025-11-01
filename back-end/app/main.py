@@ -86,7 +86,7 @@ def is_unset(filter_value: Optional[str]) -> bool:
 
 # ====== Endpoints ======
 
-@app.get("/api/overview", response_model=ApiResponse)
+@app.get("/overview", response_model=ApiResponse)
 def get_overview(
     ano: Optional[str] = Query(None),
     mes: Optional[str] = Query(None),
@@ -155,7 +155,7 @@ def get_overview(
         return {"data": overview, "success": True}
 
 
-@app.get("/api/timeseries", response_model=ApiListResponse)
+@app.get("/timeseries", response_model=ApiListResponse)
 def get_timeseries(
     ano: Optional[str] = Query(None),
     mes: Optional[str] = Query(None),
@@ -230,7 +230,7 @@ def get_timeseries(
         return {"data": [], "success": True}
 
 
-@app.get("/api/ranking/ufs", response_model=ApiListResponse)
+@app.get("/ranking/ufs", response_model=ApiListResponse)
 def get_ranking_ufs(
     ano: Optional[str] = Query(None),
     mes: Optional[str] = Query(None),
