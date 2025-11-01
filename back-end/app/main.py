@@ -187,16 +187,16 @@ def get_timeseries(
                 params = {}
                 where = []
                 if ano_int is not None:
-                    where.append('\"ANO\" = :ano')
+                    where.append('"ANO" = :ano')
                     params['ano'] = ano_int
                 if mes_int is not None:
-                    where.append('\"MES\" = :mes')
+                    where.append('"MES" = :mes')
                     params['mes'] = mes_int
 
-                sql = 'SELECT \"ANO\" AS ano, \"MES\" AS mês, SUM(CAST(\"QTDE\" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
+                sql = 'SELECT "ANO" AS ano, "MES" AS mês, SUM(CAST("QTDE" AS numeric)) AS distribuídas FROM public.distribuicao_raw'
                 if where:
                     sql = f"{sql} WHERE {' AND '.join(where)}"
-                sql = f"{sql} GROUP BY \\"ANO\\", \\"MES\\" ORDER BY \\"ANO\\", \\"MES\\""
+                sql = f"{sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
 
                 agg_rows = db.execute(text(sql), params).all() or []
 
