@@ -415,3 +415,26 @@ def debug_distrib_total(ano: Optional[str] = Query(None), mes: Optional[str] = Q
         return {"data": {"total": 0}, "success": True, "message": str(e)}
 
 
+@app.get("/debug/distrib_series")
+def debug_distrib_series(ano: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """Retorna série agregada por ano/mes diretamente do banco (debug)."""
+    try:
+        ano_int = parse_int(ano)
+        params = {}
+        where = []
+        if ano_int is not None:
+            where.append('"ANO" = :ano')
+            params['ano'] = ano_int
+
+        sql = 'SELECT "ANO" AS ano, "MES" AS mes, SUM(CAST("QTDE" AS numeric)) AS total FROM public.distribuicao_raw'
+        if where:
+            sql = f"{sql} WHERE {' AND '.join(where)}"
+        sql = f"{sql} GROUP BY \"ANO\", \"MES\" ORDER BY \"ANO\", \"MES\""
+
+        rows = db.execute(text(sql), params).all()
+        data = [ { 'ano': int(r.ano), 'mês': int(r.mes), 'total': int(r.total) } for r in rows ]
+        return { 'data': data, 'success': True }
+    except Exception as e:
+        return { 'data': [], 'success': True, 'message': str(e) }
+
+
