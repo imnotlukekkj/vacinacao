@@ -310,9 +310,11 @@ def get_ranking_ufs(
             ]
         
         return {"data": items, "success": True}
-    except Exception:
+    except Exception as e:
         # Em caso de erro, não retornar mocks — retornar lista vazia
         items = []
+        if 'debug' in locals() and debug:
+            return {"data": items, "success": True, "message": str(e)}
         return {"data": items, "success": True}
 
 
